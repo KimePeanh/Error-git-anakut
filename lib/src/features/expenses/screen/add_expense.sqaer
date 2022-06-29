@@ -1,0 +1,369 @@
+
+import 'dart:io';
+
+import 'package:anakutapp/appLocalizations.dart';
+import 'package:anakutapp/src/features/expense/bloc/expense_processing_bloc.dart';
+import 'package:anakutapp/src/features/expense/bloc/expense_processing_event.dart.dart';
+import 'package:anakutapp/src/features/expense/bloc/expense_processing_state.dart.dart';
+import 'package:anakutapp/src/features/expense/models/expense_form.dart';
+import 'package:anakutapp/src/features/setting/bloc/index.dart';
+import 'package:anakutapp/src/shared/widgets/default_appbar.dart';
+import 'package:anakutapp/src/shared/widgets/error_snackbar.dart';
+import 'package:anakutapp/src/shared/widgets/loading_dialogs.dart';
+import 'package:anakutapp/src/utils/helper/helper.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import 'widgets/expense_type_dialog.dart';
+
+class AddExpensePage extends StatelessWidget {
+  final Function? callBack;
+  AddExpensePage({this.callBack});
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+        create: (BuildContext context) => ExpenseProcessingBloc(),
+        child: AddExpensePageBody(
+          callBack: callBack,
+        ));
+  }
+}
+
+class AddExpensePageBody extends StatefulWidget {
+  final Function? callBack;
+  AddExpensePageBody({this.callBack});
+
+  @override
+  _AddExpensePageBodyState createState() => _AddExpensePageBodyState();
+}
+
+class _AddExpensePageBodyState extends State<AddExpensePageBody> {
+  final _expenseTypeCtl = TextEditingController();
+
+  final _refCtl = TextEditingController();
+
+  final _amountCtl = TextEditingController();
+
+  final _noteCtl = TextEditingController();
+
+  String? expenseTypeId;
+
+  final _formKey = GlobalKey<FormState>();
+
+  File? _image;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: defaultAppBar(
+        context: context,
+        title: AppLocalizations.of(context)!.translate("addExpense")!,
+        actions: [
+          Builder(builder: (c) {
+            return IconButton(
+              color: Colors.white,
+              icon: Icon(Icons.check_outlined),
+              onPressed: () {
+                if (_formKey.currentState!.validate()) {
+                  DateTime now = DateTime.now();
+                  String month = now.month.toString();
+                  String day = now.day.toString();
+                  String hour = now.hour.toString();
+                  String minute = now.minute.toString();
+                  String second = now.second.toString();
+                  if (now.month < 10) {
+                    month = "0" + now.month.toString();
+                  }
+                  if (now.day < 10) {
+                    day = "0" + now.day.toString();
+                  }
+                  if (now.hour < 10) {
+                    hour = "0" + now.hour.toString();
+                  }
+                  if (now.minute < 10) {
+                    minute = "0" + now.minute.toString();
+                  }
+                  if (now.second < 10) {
+                    second = "0" + now.second.toString();
+                  }
+                  String date = "${now.year}-$month-$day $hour:$minute:$second";
+                  BlocProvider.of<ExpenseProcessingBloc>(context).add(
+                      AddExpense(
+                          imageFile: _image,
+                          expenseForm: ExpenseForm(
+                              date: date,
+                              amount: _amountCtl.text,
+                              expenseTypeId: expenseTypeId,
+                              ref: _refCtl.text,
+                              note: _noteCtl.text)));
+                }
+              },
+            );
+          }),
+        ],
+      ),
+      body: BlocListener<ExpenseProcessingBloc, ExpenseProcessingState>(
+        listener: (context, state) {
+          RepositoryProvider.of<Helper>(context)
+              .handleState(state: state, context: context);
+          if (state is ProcessingExpense) {
+            loadingDialogs(context);
+          }
+          if (state is ErrorExpenseProcesssing) {
+            Navigator.of(context).pop();
+            errorSnackBar(text: state.error.toString(), context: context);
+          }
+          if (state is ProceedExpense) {
+            Navigator.of(context).pop();
+            Navigator.of(context).pop();
+            widget.callBack!();
+          }
+        },
+        child: Form(
+          key: _formKey,
+          child: Container(
+            margin: EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  TextFormField(
+                    readOnly: true,
+                    onTap: () {
+                      expenseTypeDialog(context, (expenseType) {
+                        _expenseTypeCtl.text = expenseType.name!;
+                        expenseTypeId = expenseType.id;
+                      });
+                    },
+                    controller: _expenseTypeCtl,
+                    keyboardType: TextInputType.text,
+                    decoration: InputDecoration(
+                        suffixIcon: Icon(Icons.arrow_drop_down),
+                        contentPadding: EdgeInsets.all(15),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(
+                            Radius.circular(5.0),
+                          ),
+                          borderSide: new BorderSide(
+                            width: 1,
+                          ),
+                        ),
+                        isDense: true,
+                        labelText: AppLocalizations.of(context)!
+                            .translate("expenseType")),
+                    validator: (value) {
+                      if (value!.isEmpty) {
+                        return 'Expense type is required.';
+                      }
+                      return null;
+                    },
+                  ),
+                  SizedBox(
+                    height: 10,
+                  ),
+                  TextFormField(
+                    controller: _refCtl,
+                    keyboardType: TextInputType.text,
+                    decoration: InputDecoration(
+                        contentPadding: EdgeInsets.all(15),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(
+                            Radius.circular(5.0),
+                          ),
+                          borderSide: new BorderSide(
+                            width: 1,
+                          ),
+                        ),
+                        isDense: true,
+                        labelText: AppLocalizations.of(context)!
+                            .translate("reference")),
+                    validator: (value) {
+                      // if (value!.isEmpty) {
+                      //   return 'Reference is required.';
+                      // }
+                      // return null;
+                    },
+                  ),
+                  SizedBox(
+                    height: 10,
+                  ),
+                  TextFormField(
+                    controller: _amountCtl,
+                    keyboardType: TextInputType.numberWithOptions(
+                        decimal: true, signed: true),
+                    decoration: InputDecoration(
+                        contentPadding: EdgeInsets.all(15),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(
+                            Radius.circular(5.0),
+                          ),
+                          borderSide: new BorderSide(
+                            width: 1,
+                          ),
+                        ),
+                        isDense: true,
+                        labelText:
+                            "${AppLocalizations.of(context)!.translate("amount")} (${AppLocalizations.of(context)!.translate(RepositoryProvider.of<Helper>(context).getCurrencyName(BlocProvider.of<SettingBloc>(context).state.firstCurrency))})"),
+                    validator: (value) {
+                      if (value!.isEmpty) {
+                        return 'Amount is required.';
+                      }
+                      return null;
+                    },
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$')),
+                    ],
+                  ),
+                  SizedBox(
+                    height: 10,
+                  ),
+                  TextFormField(
+                    controller: _noteCtl,
+                    keyboardType: TextInputType.text,
+                    decoration: InputDecoration(
+                        contentPadding: EdgeInsets.all(15),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(
+                            Radius.circular(5.0),
+                          ),
+                          borderSide: new BorderSide(
+                            width: 1,
+                          ),
+                        ),
+                        isDense: true,
+                        labelText:
+                            AppLocalizations.of(context)!.translate("note")),
+                    validator: (value) {
+                      // if (value!.isEmpty) {
+                      //   return 'Note is required.';
+                      // }
+                      // return null;
+                    },
+                  ),
+                  SizedBox(
+                    height: 20,
+                  ),
+
+                  TextButton(
+                    style:
+                        TextButton.styleFrom(backgroundColor: Colors.grey[200]),
+                    onPressed: () {
+                      RepositoryProvider.of<Helper>(context)
+                          .showImagePicker(context, (image) {
+                        setState(() {
+                          _image = image;
+                        });
+                      }, () {
+                        setState(() {
+                          _image = null;
+                        });
+                      });
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      height: (MediaQuery.of(context).size.width / 10) * 4,
+                      child: (_image == null)
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  AppLocalizations.of(context)!
+                                      .translate("imageAttachment")!,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .subtitle2!
+                                      .copyWith(color: Colors.grey[500]),
+                                ),
+                                SizedBox(height: 10),
+                                Icon(
+                                  Icons.add_a_photo_outlined,
+                                  color: Colors.grey[400],
+                                  size: 40,
+                                ),
+                              ],
+                            )
+                          : Image.file(
+                              _image!,
+                              fit: BoxFit.contain,
+                            ),
+                    ),
+                  ),
+                  // GestureDetector(
+                  //   onTap: () {
+                  //     _showPicker(context);
+                  //   },
+                  //   child: (_image == null)
+                  //       ? Container(
+                  //           width: (MediaQuery.of(context).size.width / 10) * 4,
+                  //           height:
+                  //               (MediaQuery.of(context).size.width / 10) * 4,
+                  //           alignment: Alignment.center,
+                  //           padding: EdgeInsets.all(0),
+                  //           decoration: BoxDecoration(
+                  //               borderRadius: BorderRadius.circular(5)),
+                  //           child: FittedBox(
+                  //             fit: BoxFit.fill,
+                  //             child: Icon(
+                  //               Icons.add_a_photo_outlined,
+                  //               color: Colors.grey[600],
+                  //               size: (MediaQuery.of(context).size.width / 10) *
+                  //                   3,
+                  //             ),
+                  //           ),
+                  //         )
+                  //       : Container(
+                  //           // height: MediaQuery.of(context).size.width / 3,
+                  //           width: (MediaQuery.of(context).size.width / 10) * 7,
+                  //           child: Image.file(_image!)),
+                  // ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPicker(context) {
+    showModalBottomSheet(
+        context: context,
+        builder: (BuildContext bc) {
+          return SafeArea(
+            child: Container(
+              child: new Wrap(
+                children: <Widget>[
+                  new ListTile(
+                      leading: new Icon(Icons.photo_library),
+                      title: new Text('Photo Library'),
+                      onTap: () {
+                        // _imgFromGallery();
+                        RepositoryProvider.of<Helper>(context)
+                            .imgFromGallery((image) {
+                          setState(() {
+                            _image = image;
+                          });
+                        });
+                        Navigator.of(context).pop();
+                      }),
+                  new ListTile(
+                    leading: new Icon(Icons.photo_camera),
+                    title: new Text('Camera'),
+                    onTap: () {
+                      RepositoryProvider.of<Helper>(context)
+                          .imgFromCamera((image) {
+                        setState(() {
+                          _image = image;
+                        });
+                      });
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        });
+  }
+}
